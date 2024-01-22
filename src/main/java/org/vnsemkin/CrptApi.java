@@ -1,6 +1,7 @@
 package org.vnsemkin;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.Getter;
@@ -12,6 +13,7 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.*;
 
 @Slf4j
@@ -44,32 +46,37 @@ public class CrptApi {
     }
 
     private void sendPostRequest(Document document, String signature) {
+        String body = null;
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
         objectMapper.setDateFormat(new SimpleDateFormat("yyyy-MM-dd"));
-        try {
-            String body = objectMapper.writeValueAsString(document);
-            RequestBody requestBody = RequestBody.create(body, JSON_MEDIA_TYPE);
-            Request request = new Request.Builder()
-                    .url(API_URL)
-                    .post(requestBody)
-                    .addHeader("Signature", signature)
-                    .build();
+        if (Objects.nonNull(document)) {
+            try {
+                body = objectMapper.writeValueAsString(document);
+            } catch (JsonProcessingException e) {
+                throw new RuntimeException(e);
+            }
+        } else {
+            body = "{" + "description " + ":" + "Something wrong with document" + "}";
+        }
+        RequestBody requestBody = RequestBody.create(body, JSON_MEDIA_TYPE);
+        Request request = new Request.Builder()
+                .url(API_URL)
+                .post(requestBody)
+                .addHeader("Signature", signature)
+                .build();
 
-            try (Response response = httpClient.newCall(request).execute()) {
-                if (response.isSuccessful()) {
-                    log.info("Document created");
-                } else {
-                    log.info("Error " + response.code()
-                            + " - "
-                            + response.message());
-                }
-            } catch (IOException e) {
-                semaphore.release();
-                e.printStackTrace();
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (response.isSuccessful()) {
+                log.info("Document created");
+            } else {
+                log.info("Error " + response.code()
+                        + " - "
+                        + response.message());
             }
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            semaphore.release();
+            e.printStackTrace();
         }
     }
 
@@ -83,7 +90,7 @@ public class CrptApi {
         semaphore.release(release);
     }
 
-    public void shutdownSemaphoreLimitUpdater(){
+    public void shutdownSemaphoreLimitUpdater() {
         timerUpdater.shutdown();
     }
 
